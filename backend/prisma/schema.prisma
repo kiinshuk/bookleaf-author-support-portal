@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         String   @default("AUTHOR")
+  authorId     String?  @unique
+  author       Author?  @relation(fields: [authorId], references: [id])
+  createdAt    DateTime @default(now())
+  tickets      Ticket[] @relation("AdminAssignee")
+}
+
+model Author {
+  id         String   @id
+  name       String
+  email      String   @unique
+  phone      String?
+  city       String?
+  joinedDate String?
+  user       User?
+  books      Book[]
+  tickets    Ticket[]
+}
+
+model Book {
+  id                    String   @id
+  authorId              String
+  author                Author   @relation(fields: [authorId], references: [id])
+  title                 String
+  isbn                  String?
+  genre                 String?
+  publicationDate       String?
+  status                String
+  mrp                   Int?
+  authorRoyaltyPerCopy  Int?
+  totalCopiesSold       Int      @default(0)
+  totalRoyaltyEarned    Int      @default(0)
+  royaltyPaid           Int      @default(0)
+  royaltyPending        Int      @default(0)
+  lastRoyaltyPayoutDate String?
+  printPartner          String?
+  availableOn           String?
+  tickets               Ticket[]
+}
+
+model Ticket {
+  id               String           @id @default(cuid())
+  authorId         String
+  author           Author           @relation(fields: [authorId], references: [id])
+  bookId           String?
+  book             Book?            @relation(fields: [bookId], references: [id])
+  subject          String
+  description      String
+  category         String?
+  aiCategory       String?
+  categoryOverride Boolean          @default(false)
+  priority         String           @default("MEDIUM")
+  aiPriority       String?
+  priorityOverride Boolean          @default(false)
+  status           String           @default("OPEN")
+  assignedToId     String?
+  assignedTo       User?            @relation("AdminAssignee", fields: [assignedToId], references: [id])
+  internalNotes    InternalNote[]
+  responses        TicketResponse[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model TicketResponse {
+  id          String   @id @default(cuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId    String?
+  authorName  String?
+  authorEmail String?
+  body        String
+  fromAdmin   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model InternalNote {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+}
