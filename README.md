@@ -11,6 +11,14 @@ Web app with author and admin portals, ticket lifecycle, real-time updates, and 
 - Real-time: WebSockets (ws)
 - AI: OpenAI gpt-4o-mini (optional), Ollama optional, deterministic fallback
 
+## UI Design
+The frontend follows a PlayStation-inspired design system (see `DESIGN.md`, installed via `npx getdesign@latest add playstation`):
+- Three-canvas model — black chrome (sidebar/login), white working canvas, soft-grey (`#f5f7fa`) cards.
+- PlayStation Blue `#0070d1` carries every primary action as a fully-rounded pill; Commerce Orange `#d53b00` is reserved for urgency (pending royalties).
+- Display headings render at weight 300 (Roboto as the PlayStation SST substitute), body in Inter.
+- 8px card radius, 4px input radius, flat surfaces with hairline dividers.
+All tokens live as CSS variables in `frontend/src/styles.css`; components map onto them via `ui.jsx` primitives (badges, fields, alerts).
+
 ## Local Setup
 Prereqs: Node 20+, npm. Optional: OPENAI_API_KEY.
 
