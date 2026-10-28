@@ -13,13 +13,13 @@ test.before(async () => {
 test.after(async () => { server.close(); });
 
 async function login(email, password) {
-  const r = await fetch(base + "/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
+  const r = await fetch(base + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
   const j = await r.json();
   return { status: r.status, token: j.token, user: j.user };
 }
 
 test("health ok", async () => {
-  const r = await fetch(base + "/health");
+  const r = await fetch(base + "/api/health");
   assert.equal(r.status, 200);
   assert.equal((await r.json()).status, "ok");
 });
@@ -37,14 +37,14 @@ test("author login works", async () => {
 });
 
 test("books require auth", async () => {
-  const r = await fetch(base + "/books");
+  const r = await fetch(base + "/api/books");
   assert.equal(r.status, 401);
 });
 
 test("author sees own books only", async () => {
   const { token } = await login("priya.sharma@email.com", "author123");
   const h = { Authorization: "Bearer " + token };
-  const r = await fetch(base + "/books", { headers: h });
+  const r = await fetch(base + "/api/books", { headers: h });
   const j = await r.json();
   assert.equal(r.status, 200);
   assert.ok(j.books.length > 0);
@@ -52,23 +52,23 @@ test("author sees own books only", async () => {
 });
 
 test("ticket creation requires auth and validates fields", async () => {
-  const r = await fetch(base + "/tickets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "s", description: "d" }) });
+  const r = await fetch(base + "/api/tickets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "s", description: "d" }) });
   assert.equal(r.status, 401);
   const { token } = await login("priya.sharma@email.com", "author123");
   const h = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
-  const r2 = await fetch(base + "/tickets", { method: "POST", headers: h, body: JSON.stringify({ subject: "", description: "d" }) });
+  const r2 = await fetch(base + "/api/tickets", { method: "POST", headers: h, body: JSON.stringify({ subject: "", description: "d" }) });
   assert.equal(r2.status, 400);
 });
 
 test("ticket creation succeeds and no internal notes leak", async () => {
   const { token } = await login("priya.sharma@email.com", "author123");
   const h = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
-  const r = await fetch(base + "/tickets", { method: "POST", headers: h, body: JSON.stringify({ subject: "Royalty missing", description: "No payout for 4 months" }) });
+  const r = await fetch(base + "/api/tickets", { method: "POST", headers: h, body: JSON.stringify({ subject: "Royalty missing", description: "No payout for 4 months" }) });
   assert.equal(r.status, 201);
   const j = await r.json();
   assert.ok(!("internalNotes" in (j.ticket || {})) || (j.ticket.internalNotes || []).length === 0);
   // fetch detail
-  const d = await fetch(base + "/tickets/" + j.ticket.id, { headers: h });
+  const d = await fetch(base + "/api/tickets/" + j.ticket.id, { headers: h });
   const dj = await d.json();
   assert.equal(dj.ticket.internalNotes.length, 0);
 });
@@ -77,7 +77,7 @@ test("admin can list tickets and queue sorted by priority", async () => {
   const { token, status } = await login("admin@bookleaf.com", "admin123");
   assert.equal(status, 200);
   const h = { Authorization: "Bearer " + token };
-  const r = await fetch(base + "/tickets", { headers: h });
+  const r = await fetch(base + "/api/tickets", { headers: h });
   assert.equal(r.status, 200);
   const j = await r.json();
   assert.ok(Array.isArray(j.tickets));
@@ -92,23 +92,23 @@ test("ticket list date filter validates input and filters correctly", async () =
   const { token } = await login("admin@bookleaf.com", "admin123");
   const h = { Authorization: "Bearer " + token };
   // invalid date -> meaningful 400, not a 500
-  const bad = await fetch(base + "/tickets?createdAfter=not-a-date", { headers: h });
+  const bad = await fetch(base + "/api/tickets?createdAfter=not-a-date", { headers: h });
   assert.equal(bad.status, 400);
   const badJson = await bad.json();
   assert.ok(badJson.error);
   // epoch -> every ticket is after it
-  const all = await (await fetch(base + "/tickets?createdAfter=1970-01-01T00:00:00Z", { headers: h })).json();
-  const unfiltered = await (await fetch(base + "/tickets", { headers: h })).json();
+  const all = await (await fetch(base + "/api/tickets?createdAfter=1970-01-01T00:00:00Z", { headers: h })).json();
+  const unfiltered = await (await fetch(base + "/api/tickets", { headers: h })).json();
   assert.equal(all.tickets.length, unfiltered.tickets.length);
   // far future -> no tickets
-  const none = await (await fetch(base + "/tickets?createdAfter=2999-01-01T00:00:00Z", { headers: h })).json();
+  const none = await (await fetch(base + "/api/tickets?createdAfter=2999-01-01T00:00:00Z", { headers: h })).json();
   assert.equal(none.tickets.length, 0);
 });
 
 test("admin-only endpoints reject authors", async () => {
   const { token } = await login("priya.sharma@email.com", "author123");
   const h = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
-  const r = await fetch(base + "/tickets/anything/notes", { method: "POST", headers: h, body: JSON.stringify({ body: "note" }) });
+  const r = await fetch(base + "/api/tickets/anything/notes", { method: "POST", headers: h, body: JSON.stringify({ body: "note" }) });
   assert.ok(r.status === 401 || r.status === 403 || r.status === 404);
 });
 
@@ -116,10 +116,10 @@ test("AI draft generation does not fail when no provider", async () => {
   const { token } = await login("admin@bookleaf.com", "admin123");
   const h = { Authorization: "Bearer " + token };
   // find a ticket
-  const list = await (await fetch(base + "/tickets", { headers: h })).json();
+  const list = await (await fetch(base + "/api/tickets", { headers: h })).json();
   if (list.tickets.length === 0) return;
   const id = list.tickets[0].id;
-  const r = await fetch(base + "/tickets/" + id + "/draft", { method: "POST", headers: h });
+  const r = await fetch(base + "/api/tickets/" + id + "/draft", { method: "POST", headers: h });
   assert.equal(r.status, 200);
   const j = await r.json();
   assert.ok(typeof j.draft === "string" && j.draft.length > 0);
@@ -173,7 +173,7 @@ test("AI draft is cached per ticket state and still returned with no provider", 
 
 test("admin cost endpoint reports provider chain; authors forbidden", async () => {
   const { token: adminToken } = await login("admin@bookleaf.com", "admin123");
-  const r = await fetch(base + "/ai/usage", { headers: { Authorization: "Bearer " + adminToken } });
+  const r = await fetch(base + "/api/ai/usage", { headers: { Authorization: "Bearer " + adminToken } });
   assert.equal(r.status, 200);
   const j = await r.json();
   assert.ok(j.provider.terminal.includes("deterministic"));
@@ -182,7 +182,7 @@ test("admin cost endpoint reports provider chain; authors forbidden", async () =
   // key presence only — the secret itself must never appear in any response body
   assert.ok(!JSON.stringify(j).includes("sk-"));
   const { token: authorToken } = await login("priya.sharma@email.com", "author123");
-  const denied = await fetch(base + "/ai/usage", { headers: { Authorization: "Bearer " + authorToken } });
+  const denied = await fetch(base + "/api/ai/usage", { headers: { Authorization: "Bearer " + authorToken } });
   assert.ok(denied.status === 401 || denied.status === 403);
 });
 
