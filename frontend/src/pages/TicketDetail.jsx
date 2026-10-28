@@ -24,14 +24,8 @@ export default function TicketDetail() {
 
   useEffect(() => {
     load();
-    const token = getToken();
-    if (!token) return;
-    const ws = new WebSocket("ws://localhost:4000/ws?token=" + token);
-    wsRef.current = ws;
-    ws.onmessage = (ev) => {
-      try { const m = JSON.parse(ev.data); if (m.payload?.ticketId === id) load(); } catch {}
-    };
-    return () => ws.close();
+    const interval = setInterval(load, 4000);
+    return () => clearInterval(interval);
   }, [id]);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2500); };

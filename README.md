@@ -102,7 +102,7 @@ Frontend production build: passes.
 ## Known Limitations
 - SQLite locally; deployment uses managed Postgres (provider swap + migration).
 - File attachments: picker UI only (files are not uploaded or stored — the assignment marks actual upload as bonus). The schema has no attachment table yet.
-- No live deployment URL — no hosting credentials available; local run instructions above.
+- Deployment: see DEPLOY.md (Vercel + Neon Postgres).
 - No automated WebSocket tests yet.
 - Deterministic fallbacks are not AI-generated and are labeled as fallback drafts in docs.
 

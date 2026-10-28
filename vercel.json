@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "buildCommand": "cd backend && npm install && npx prisma migrate deploy || npx prisma db push --accept-data-loss && cd ../frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "echo 'install handled in buildCommand'",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.js": { "maxDuration": 30 }
+  }
+}

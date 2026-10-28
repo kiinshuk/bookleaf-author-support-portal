@@ -32,11 +32,8 @@ export default function AdminQueue() {
   };
   useEffect(() => { load(filters); }, [filters]);
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    const ws = new WebSocket("ws://localhost:4000/ws?token=" + token);
-    ws.onmessage = (ev) => { try { const m = JSON.parse(ev.data); if (m.type?.startsWith("ticket.")) load(filters); } catch {} };
-    return () => ws.close();
+    const interval = setInterval(() => load(filters), 4000);
+    return () => clearInterval(interval);
   }, [filters]);
 
   const set = (k) => (e) => setFilters({ ...filters, [k]: e.target.value });

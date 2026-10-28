@@ -1,0 +1,13 @@
+{
+  "name": "bookleaf-author-support-portal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "build:deploy": "node backend/scripts/to-postgres.mjs && cd backend && npx prisma migrate deploy && cd ../frontend && npm run build"
+  },
+  "devDependencies": {
+    "serverless-http": "^3.2.0"
+  }
+}
+

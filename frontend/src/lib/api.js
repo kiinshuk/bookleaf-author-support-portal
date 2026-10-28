@@ -1,4 +1,4 @@
-const BASE = "http://localhost:4000";
+const BASE = (import.meta.env && import.meta.env.VITE_API_BASE) ? import.meta.env.VITE_API_BASE.replace(/\/$/, "") : "";
 export function getToken(){ return localStorage.getItem("token"); }
 export function setToken(t){ localStorage.setItem("token", t); }
 export function clearToken(){ localStorage.removeItem("token"); }
@@ -11,3 +11,4 @@ export async function api(path, options={}){
   if (!res.ok) { const e = await res.json().catch(()=>({error:res.statusText})); throw new Error(e.error||"Request failed"); }
   return res.json();
 }
+export function sameOriginBase(){ return BASE; }

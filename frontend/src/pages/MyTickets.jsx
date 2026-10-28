@@ -10,17 +10,8 @@ export default function MyTickets() {
 
   useEffect(() => {
     load();
-    const token = getToken();
-    if (!token) return;
-    const ws = new WebSocket("ws://localhost:4000/ws?token=" + token);
-    wsRef.current = ws;
-    ws.onmessage = (ev) => {
-      try {
-        const m = JSON.parse(ev.data);
-        if (m.type && m.type.startsWith("ticket.")) load();
-      } catch {}
-    };
-    return () => ws.close();
+    const interval = setInterval(load, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
