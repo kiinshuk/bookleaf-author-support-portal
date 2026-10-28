@@ -14,6 +14,7 @@ import authRoutes from "./routes/auth.js";
 import authorRoutes from "./routes/authors.js";
 import bookRoutes from "./routes/books.js";
 import ticketRoutes from "./routes/tickets.js";
+import aiRoutes from "./routes/ai.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const openapi = JSON.parse(readFileSync(join(__dirname, "..", "openapi.json"), "utf8"));
@@ -33,6 +34,7 @@ app.use("/auth", authLimiter, authRoutes);
 app.use("/authors", authorRoutes);
 app.use("/books", bookRoutes);
 app.use("/tickets", ticketRoutes);
+app.use("/ai", aiRoutes);
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 

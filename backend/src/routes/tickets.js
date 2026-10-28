@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { classifyTicket, scorePriority, draftResponse } from "../services/ai.js";
+import { classifyAndScore, draftResponse } from "../services/ai.js";
 import { broadcast } from "../lib/websocket.js";
 
 const router = Router();
@@ -19,12 +19,12 @@ router.post("/", requireAuth, requireRole("AUTHOR"), async (req, res, next) => {
     const ticket = await prisma.ticket.create({
       data: { authorId: req.user.authorId, bookId: bookId || null, subject, description },
     });
-    // async AI (fire and forget) with graceful degradation
+    // async AI triage (fire and forget) with graceful degradation: the ticket exists and is
+    // usable before the model answers, and classification + priority come back in ONE call.
     (async () => {
       try {
-        const aiCat = await classifyTicket({ subject, description });
-        const aiPri = await scorePriority({ subject, description });
-        await prisma.ticket.update({ where: { id: ticket.id }, data: { aiCategory: aiCat, category: aiCat, aiPriority: aiPri, priority: aiPri } });
+        const { category, priority } = await classifyAndScore({ subject, description });
+        await prisma.ticket.update({ where: { id: ticket.id }, data: { aiCategory: category, category, aiPriority: priority, priority } });
         broadcast({ type: "ticket.updated", payload: { ticketId: ticket.id } }, (info) => info.role === "ADMIN" || info.authorId === req.user.authorId);
       } catch (e) { console.error("AI classify error", e.message); }
     })();

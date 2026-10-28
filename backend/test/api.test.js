@@ -125,6 +125,67 @@ test("AI draft generation does not fail when no provider", async () => {
   assert.ok(typeof j.draft === "string" && j.draft.length > 0);
 });
 
+test("AI helpers: extractJSON salvages fenced and embedded JSON", async () => {
+  const { extractJSON } = await import("../src/services/ai.js");
+  // plain
+  assert.deepEqual(extractJSON('{"category":"General Inquiry","priority":"LOW"}'), { category: "General Inquiry", priority: "LOW" });
+  // fenced by the model
+  assert.equal(extractJSON('```json\n{"category":"Printing & Quality"}\n```').category, "Printing & Quality");
+  // embedded in prose
+  assert.equal(extractJSON('Sure! Here is the result: {"priority":"HIGH"} hope that helps').priority, "HIGH");
+  // nested braces must not truncate the object
+  assert.deepEqual(extractJSON('x {"a":{"b":1}} y'), { a: { b: 1 } });
+  // no JSON at all -> null, caller uses deterministic fallback
+  assert.equal(extractJSON("I cannot classify this."), null);
+  assert.equal(extractJSON(""), null);
+});
+
+test("AI triage degrades to deterministic heuristics with no provider", async () => {
+  const { classifyAndScore } = await import("../src/services/ai.js");
+  // With no OPENAI_API_KEY / OLLAMA_MODEL configured this must still return
+  // valid, allow-listed answers — never throw and never block ticket creation.
+  const royalty = await classifyAndScore({ subject: "Royalty not paid", description: "I haven't received any royalty for 6 months." });
+  assert.equal(royalty.category, "Royalty & Payments");
+  assert.equal(royalty.priority, "HIGH");
+  assert.equal(royalty.provider, "deterministic");
+  // the apostrophe-less form authors actually type must score the same
+  const typed = await classifyAndScore({ subject: "Royalty missing", description: "I havent received my royalty for 6 months, whats going on?" });
+  assert.equal(typed.priority, "HIGH");
+  const isbn = await classifyAndScore({ subject: "ISBN mismatch", description: "Amazon shows a wrong ISBN on my book." });
+  assert.equal(isbn.category, "ISBN & Metadata Issues");
+  const benign = await classifyAndScore({ subject: "Author bio", description: "Can I update my author bio?" });
+  assert.equal(benign.category, "General Inquiry");
+});
+
+test("AI draft is cached per ticket state and still returned with no provider", async () => {
+  const { draftResponse, clearDraftCache } = await import("../src/services/ai.js");
+  clearDraftCache();
+  const ticket = { id: "t-cache-test", subject: "Royalty query", category: "Royalty & Payments", priority: "HIGH", description: "Where is my payout?", updatedAt: "2026-01-01T00:00:00Z" };
+  const author = { name: "Priya", email: "p@e.com" };
+  const first = await draftResponse({ ticket, author, book: null, history: [] });
+  const second = await draftResponse({ ticket, author, book: null, history: [] });
+  assert.equal(first, second); // same ticket state -> cached, no second spend
+  // a new message in the thread invalidates the cache entry
+  const after = await draftResponse({ ticket, author, book: null, history: [{ fromAdmin: false, body: "hello" }] });
+  assert.notEqual(after, undefined);
+  assert.ok(after.length > 0);
+});
+
+test("admin cost endpoint reports provider chain; authors forbidden", async () => {
+  const { token: adminToken } = await login("admin@bookleaf.com", "admin123");
+  const r = await fetch(base + "/ai/usage", { headers: { Authorization: "Bearer " + adminToken } });
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.ok(j.provider.terminal.includes("deterministic"));
+  assert.ok(j.totals && typeof j.totals.calls === "number");
+  assert.ok(Array.isArray(j.recent));
+  // key presence only — the secret itself must never appear in any response body
+  assert.ok(!JSON.stringify(j).includes("sk-"));
+  const { token: authorToken } = await login("priya.sharma@email.com", "author123");
+  const denied = await fetch(base + "/ai/usage", { headers: { Authorization: "Bearer " + authorToken } });
+  assert.ok(denied.status === 401 || denied.status === 403);
+});
+
 test("WebSocket rejects unauthenticated", async () => {
   const WebSocket = (await import("ws")).default;
   await new Promise((resolve) => {
