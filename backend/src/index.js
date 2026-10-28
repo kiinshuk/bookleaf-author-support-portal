@@ -21,10 +21,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const openapi = JSON.parse(readFileSync(join(__dirname, "..", "openapi.json"), "utf8"));
 
 const API_PREFIX = "/api";
+const allowedOrigins = [
+  config.corsOrigin,
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  process.env.VERCEL_URL || null,
+].filter(Boolean);
+
+const corsOriginCheck = (origin, callback) => {
+  if (!origin) return callback(null, true); // same-origin or machine clients without Origin
+  if (allowedOrigins.includes(origin)) return callback(null, true);
+  callback(new Error("Not allowed by CORS"));
+};
+
 const app = express();
 app.set("trust proxy", 1);
 app.use(helmet());
-app.use(cors({ origin: config.corsOrigin, credentials: true }));
+app.use(cors({ origin: corsOriginCheck, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 
 const globalLimiter = rateLimit({

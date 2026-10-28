@@ -45,7 +45,7 @@ cd frontend
 npm install
 npm run dev
 ```
-Open http://localhost:5173. API docs/Swagger UI: http://localhost:4000/docs
+Open http://localhost:5173. API docs/Swagger UI: http://localhost:4000/api/docs. Health check: http://localhost:4000/api/health.
 
 ## Credentials
 - Admin: admin@bookleaf.com / admin123
@@ -60,7 +60,7 @@ Books: GET /books, GET /books/:id
 Tickets: POST /tickets, GET /tickets (filters: status, category, priority, createdAfter ISO date; sorted Critical→Low then oldest first), GET /tickets/:id, PATCH /tickets/:id (admin), POST /tickets/:id/notes (admin), POST /tickets/:id/responses, POST /tickets/:id/draft (admin)
 AI: GET /ai/usage (admin-only, token/cost telemetry)
 
-Full request/response schemas for every endpoint: Swagger UI at http://localhost:4000/docs (spec source: `backend/openapi.json`).
+Full request/response schemas for every endpoint: Swagger UI at http://localhost:4000/api/docs (deployed: <deployed origin>/api/docs; spec source: `backend/openapi.json`).
 
 ## Real-time
 WebSocket at ws://localhost:4000/ws?token=<jwt>. Emits ticket.created, ticket.updated, ticket.response.
@@ -98,6 +98,34 @@ Run: `cd backend && npm test`
 - 16/16 passing: health, login validation, author login, auth guards, book scoping, ticket validation/creation, internal-note isolation, queue sort order, date-filter validation, admin-only endpoint rejection, AI draft fallback, JSON-salvage parsing, deterministic triage degradation, draft caching, AI usage endpoint RBAC + no-key-leak, WebSocket auth.
 Dataset check: `npm run verify:dataset` → 10 authors, 18 books, null/pending preserved.
 Frontend production build: passes.
+
+## Deployment (Vercel multi-service)
+
+See `DEPLOY.md` for the full step-by-step. The repository is configured as a **Vercel multi-service project** (`backend` = Express, `frontend` = Vite), with one public domain and the `/api/*` -> backend rewrite. Local SQLite is unchanged.
+
+### Environment variables (Vercel)
+
+| Name | Required | Purpose |
+| --- | --- | --- |
+| DATABASE_URL | Yes | Pooled PostgreSQL URL (Neon/Supabase). Must start with postgresql:// or postgres://. |
+| JWT_SECRET | Yes | Long, random string used to sign every JWT. |
+| OPENAI_API_KEY | No | Optional; if empty the deterministic fallback is used. |
+| OPENAI_MODEL | No | Defaults to gpt-4o-mini. |
+| CORS_ORIGIN | No | Default http://localhost:5173; production allowed origin (same-origin still works). |
+| VITE_API_BASE | No | Leave blank (`/api` same-origin). Never commit an absolute origin. |
+| JWT_EXPIRES_IN | No | Defaults to `7d`. |
+
+### Database migration and seeding procedure
+1. Configure DATABASE_URL for a pooled Postgres instance in Vercel.
+2. During the Vercel build, `npm run build:deploy` runs `prisma generate` and `prisma migrate deploy` against the committed migration under `backend/prisma/production/migrations/`.
+3. Seed exactly once:
+   ```
+   cd backend
+   DATABASE_URL="postgresql://..." node src/seed/index.js
+   ```
+4. Subsequent deployments only apply pending migrations; no automatic seed or reset runs during build.
+
+---
 
 ## Known Limitations
 - SQLite locally; deployment uses managed Postgres (provider swap + migration).
