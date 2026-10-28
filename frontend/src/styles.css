@@ -175,6 +175,21 @@ a:hover{text-decoration:underline}
 .filters select:hover{background:var(--surface-soft)}
 .pill-count{font-size:13px;color:var(--ink-3);margin-left:auto;align-self:center}
 
+/* ===== queue age chip ===== */
+.age{font-size:11px;font-weight:700;letter-spacing:.324px;text-transform:uppercase;color:var(--ink-3);background:var(--surface-soft);border-radius:var(--pill);padding:3px 10px;white-space:nowrap}
+.age.stale{background:rgba(200,27,58,.1);color:var(--danger)}
+
+/* ===== attachments (UI-only picker) ===== */
+.file-add{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:.324px;height:36px;padding:0 16px;border:1px dashed var(--ash);border-radius:var(--pill);color:var(--link);cursor:pointer}
+.file-add:hover{background:var(--surface-soft)}
+.file-add input[type=file]{display:none}
+.file-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.file-list li{display:flex;align-items:center;gap:10px;font-size:13px;background:var(--surface-soft);border-radius:var(--radius-sm);padding:6px 10px}
+.file-name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-size{color:var(--ink-3);margin-left:auto;white-space:nowrap}
+.file-remove{background:none;border:0;color:var(--ink-3);font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
+.file-remove:hover{color:var(--danger)}
+
 /* ===== misc controls ===== */
 .pill-select{font-family:var(--font-display);font-size:13px;font-weight:500;height:36px;padding:0 14px;border:1px solid var(--ash);border-radius:var(--pill);background:var(--canvas);color:var(--ink)}
 .pill-select:hover{background:var(--surface-soft)}

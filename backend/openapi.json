@@ -1,9 +1,159 @@
 {
   "openapi": "3.0.0",
-  "info": { "title": "BookLeaf Author Support API", "version": "1.0.0" },
-  "components": {
-    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } }
+  "info": {
+    "title": "BookLeaf Author Support & Communication Portal API",
+    "version": "1.0.0",
+    "description": "REST API powering the author and admin portals. All endpoints (except /health and /auth/login) require a JWT bearer token. Role-based access: AUTHORS see only their own data; ADMINs see everything. Errors return `{ \"error\": \"message\" }` with an appropriate 4xx/5xx status — never a bare 500 body."
   },
+  "servers": [{ "url": "http://localhost:4000", "description": "Local development" }],
   "security": [{ "bearerAuth": [] }],
-  "paths": {}
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
+    "parameters": {
+      "id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Resource ID" }
+    },
+    "responses": {
+      "Error": { "description": "Error response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "User": { "type": "object", "properties": { "id": { "type": "string" }, "email": { "type": "string", "format": "email" }, "name": { "type": "string" }, "role": { "type": "string", "enum": ["AUTHOR", "ADMIN"] } } },
+      "Book": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "title": { "type": "string" }, "isbn": { "type": "string", "nullable": true },
+          "genre": { "type": "string", "nullable": true }, "publicationDate": { "type": "string", "nullable": true },
+          "status": { "type": "string", "description": "Production stage, e.g. 'Published & Live' or 'Typesetting'" },
+          "mrp": { "type": "number", "nullable": true }, "totalCopiesSold": { "type": "integer", "nullable": true },
+          "totalRoyaltyEarned": { "type": "number", "nullable": true }, "royaltyPaid": { "type": "number", "nullable": true },
+          "royaltyPending": { "type": "number", "nullable": true }, "availableOn": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Ticket": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "subject": { "type": "string" }, "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] },
+          "priority": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+          "aiPriority": { "type": "string", "nullable": true, "description": "Original model output, preserved even when an admin overrides priority" },
+          "category": { "type": "string", "nullable": true }, "aiCategory": { "type": "string", "nullable": true },
+          "categoryOverride": { "type": "boolean" }, "priorityOverride": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "author": { "$ref": "#/components/schemas/User" }, "book": { "$ref": "#/components/schemas/Book" },
+          "responses": { "type": "array", "items": { "$ref": "#/components/schemas/TicketResponse" } },
+          "internalNotes": { "type": "array", "items": { "type": "object" }, "description": "Admin-only; always empty for authors" },
+          "assignedTo": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "TicketResponse": { "type": "object", "properties": { "id": { "type": "string" }, "body": { "type": "string" }, "fromAdmin": { "type": "boolean" }, "authorName": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" } } },
+      "Error": { "type": "object", "properties": { "error": { "type": "string" } } }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [],
+        "summary": "Health check",
+        "responses": { "200": { "description": "Service is up", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" }, "env": { "type": "string" } } } } } } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "security": [],
+        "summary": "Exchange email + password for a JWT",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["email", "password"], "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Token and user profile", "content": { "application/json": { "schema": { "type": "object", "properties": { "token": { "type": "string" }, "user": { "$ref": "#/components/schemas/User" } } } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Current authenticated user",
+        "responses": { "200": { "description": "User profile", "content": { "application/json": { "schema": { "type": "object", "properties": { "user": { "$ref": "#/components/schemas/User" } } } } } }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/authors": {
+      "get": {
+        "summary": "List authors (admin only)",
+        "responses": { "200": { "description": "Authors with their books" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/books": {
+      "get": {
+        "summary": "List books",
+        "description": "AUTHOR: only their own books. ADMIN: every book in the catalogue.",
+        "responses": { "200": { "description": "Book list", "content": { "application/json": { "schema": { "type": "object", "properties": { "books": { "type": "array", "items": { "$ref": "#/components/schemas/Book" } } } } } } }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/tickets": {
+      "get": {
+        "summary": "List tickets",
+        "description": "AUTHOR: only their own tickets. ADMIN: all tickets, filterable. Sorted by priority (Critical → Low) then oldest first, so the most urgent and oldest unresolved work surfaces at the top.",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] } },
+          { "name": "category", "in": "query", "schema": { "type": "string", "enum": ["Royalty & Payments", "ISBN & Metadata Issues", "Printing & Quality", "Distribution & Availability", "Book Status & Production Updates", "General Inquiry"] } },
+          { "name": "priority", "in": "query", "schema": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"] } },
+          { "name": "createdAfter", "in": "query", "schema": { "type": "string", "format": "date-time" }, "description": "ISO 8601 timestamp — only tickets created at or after this moment. Invalid dates return 400." }
+        ],
+        "responses": { "200": { "description": "Ticket list", "content": { "application/json": { "schema": { "type": "object", "properties": { "tickets": { "type": "array", "items": { "$ref": "#/components/schemas/Ticket" } } } } } } }, "400": { "$ref": "#/components/responses/Error" } }
+      },
+      "post": {
+        "summary": "Create a ticket (author only)",
+        "description": "Classification and priority are computed asynchronously by the AI service after the response returns, so ticket creation never blocks on the model. If the model is unavailable the ticket is still created and the deterministic fallback classifies it.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["subject", "description"], "properties": { "bookId": { "type": "string", "nullable": true, "description": "Omit or null for General / Account Level queries. Must be a book owned by the author, else 400." }, "subject": { "type": "string" }, "description": { "type": "string" } } } } }
+        },
+        "responses": { "201": { "description": "Created ticket" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/tickets/{id}": {
+      "get": {
+        "summary": "Get one ticket",
+        "description": "Authors may only read their own tickets (403 otherwise). Internal notes are always stripped from author responses.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": { "200": { "description": "Ticket with responses" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      },
+      "patch": {
+        "summary": "Update a ticket (admin only)",
+        "description": "Any of these are admin overrides of the AI: category, priority, status, or assignment. Overrides are flagged with categoryOverride / priorityOverride so the UI can distinguish human decisions from model output.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "enum": ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] }, "category": { "type": "string" }, "priority": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"] }, "assignedToId": { "type": "string", "nullable": true, "description": "Pass a user id to assign, null to unassign." } } } } }
+        },
+        "responses": { "200": { "description": "Updated ticket" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/tickets/{id}/responses": {
+      "post": {
+        "summary": "Post a public response",
+        "description": "Visible to the author in the conversation thread. When an admin responds the ticket auto-moves to IN_PROGRESS and a WebSocket event pushes it to connected clients.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["body"], "properties": { "body": { "type": "string" } } } } } },
+        "responses": { "201": { "description": "Created response" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/tickets/{id}/notes": {
+      "post": {
+        "summary": "Add an internal note (admin only)",
+        "description": "Never visible to the author, on any endpoint.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["body"], "properties": { "body": { "type": "string" } } } } } },
+        "responses": { "201": { "description": "Created note" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/tickets/{id}/draft": {
+      "post": {
+        "summary": "Generate an AI-drafted response (admin only)",
+        "description": "Returns a draft the admin can edit before sending — nothing is sent to the author automatically. Uses OpenAI gpt-4o-mini when OPENAI_API_KEY is set, otherwise falls back to deterministic policy text. Only the current query and relevant knowledge-base sections are sent, not the whole corpus.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": { "200": { "description": "Draft text", "content": { "application/json": { "schema": { "type": "object", "properties": { "draft": { "type": "string" } } } } } }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    }
+  }
 }

@@ -42,6 +42,11 @@ router.get("/", requireAuth, async (req, res, next) => {
     if (req.query.status) where.status = req.query.status;
     if (req.query.category) where.category = req.query.category;
     if (req.query.priority) where.priority = req.query.priority;
+    if (req.query.createdAfter) {
+      const after = new Date(req.query.createdAfter);
+      if (isNaN(after.getTime())) return res.status(400).json({ error: "createdAfter must be a valid ISO 8601 date" });
+      where.createdAt = { gte: after };
+    }
     const tickets = await prisma.ticket.findMany({
       where,
       include: { author: true, book: true, responses: { orderBy: { createdAt: "asc" } }, internalNotes: req.user.role === "ADMIN" },

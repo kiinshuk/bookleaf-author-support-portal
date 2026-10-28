@@ -50,15 +50,17 @@ All private routes require `Authorization: Bearer <token>`.
 Auth: POST /auth/login, GET /auth/me
 Authors: GET /authors, GET /authors/me
 Books: GET /books, GET /books/:id
-Tickets: POST /tickets, GET /tickets (filters status, category, priority; sorted Critical?Low then oldest first), GET /tickets/:id, PATCH /tickets/:id (admin), POST /tickets/:id/notes (admin), POST /tickets/:id/responses, POST /tickets/:id/draft (admin)
+Tickets: POST /tickets, GET /tickets (filters: status, category, priority, createdAfter ISO date; sorted Critical→Low then oldest first), GET /tickets/:id, PATCH /tickets/:id (admin), POST /tickets/:id/notes (admin), POST /tickets/:id/responses, POST /tickets/:id/draft (admin)
+
+Full request/response schemas for every endpoint: Swagger UI at http://localhost:4000/docs (spec source: `backend/openapi.json`).
 
 ## Real-time
 WebSocket at ws://localhost:4000/ws?token=<jwt>. Emits ticket.created, ticket.updated, ticket.response.
 
 ## AI Integration
-Prompts grounded in BookLeaf KB (80/20 split, quarterly payouts 45 days, ?1,000 threshold, ISBN policy, 5-7 business day print, free reprint, 7-10 day listing, 24-48h resync, production stages, tone). Categories exact six; priorities Critical/High/Medium/Low. Classification & priority run asynchronously after ticket persist. Drafts editable before send.
+Prompts grounded in BookLeaf KB (80/20 split, quarterly payouts 45 days, ₹1,000 threshold, ISBN policy, 5-7 business day print, free reprint, 7-10 day listing, 24-48h resync, production stages, tone). Categories exact six; priorities Critical/High/Medium/Low. Classification & priority run asynchronously after ticket persist. Drafts editable before send.
 
-Fallbacks: OpenAI (if API key) ? Ollama (if OLLAMA_MODEL) ? deterministic. Tickets still create and manual responses remain available when AI disabled.
+Fallbacks: OpenAI (if API key) → Ollama (if OLLAMA_MODEL) → deterministic. Tickets still create and manual responses remain available when AI disabled.
 
 Cost: only ticket text + relevant author/book record + prior thread; KB cached constant; AI once per ticket creation, not per read.
 
@@ -74,12 +76,13 @@ Cost: only ticket text + relevant author/book record + prior thread; KB cached c
 
 ## Tests
 Run: `cd backend && npm test`
-- 3/3 passed: health, author login, auth guard.
-Dataset check: `npm run verify:dataset` ? 10 authors, 18 books, null/pending preserved.
+- 12/12 passing: health, login validation, author login, auth guards, book scoping, ticket validation/creation, internal-note isolation, queue sort order, date-filter validation, admin-only endpoint rejection, AI draft fallback, WebSocket auth.
+Dataset check: `npm run verify:dataset` → 10 authors, 18 books, null/pending preserved.
 Frontend production build: passes.
 
 ## Known Limitations
 - SQLite locally; deployment uses managed Postgres (provider swap + migration).
-- File attachments UI only (bonus not implemented).
+- File attachments: picker UI only (files are not uploaded or stored — the assignment marks actual upload as bonus). The schema has no attachment table yet.
+- No live deployment URL — no hosting credentials available; local run instructions above.
 - No automated WebSocket tests yet.
 - Deterministic fallbacks are not AI-generated and are labeled as fallback drafts in docs.

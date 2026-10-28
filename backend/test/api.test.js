@@ -88,6 +88,23 @@ test("admin can list tickets and queue sorted by priority", async () => {
   }
 });
 
+test("ticket list date filter validates input and filters correctly", async () => {
+  const { token } = await login("admin@bookleaf.com", "admin123");
+  const h = { Authorization: "Bearer " + token };
+  // invalid date -> meaningful 400, not a 500
+  const bad = await fetch(base + "/tickets?createdAfter=not-a-date", { headers: h });
+  assert.equal(bad.status, 400);
+  const badJson = await bad.json();
+  assert.ok(badJson.error);
+  // epoch -> every ticket is after it
+  const all = await (await fetch(base + "/tickets?createdAfter=1970-01-01T00:00:00Z", { headers: h })).json();
+  const unfiltered = await (await fetch(base + "/tickets", { headers: h })).json();
+  assert.equal(all.tickets.length, unfiltered.tickets.length);
+  // far future -> no tickets
+  const none = await (await fetch(base + "/tickets?createdAfter=2999-01-01T00:00:00Z", { headers: h })).json();
+  assert.equal(none.tickets.length, 0);
+});
+
 test("admin-only endpoints reject authors", async () => {
   const { token } = await login("priya.sharma@email.com", "author123");
   const h = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
