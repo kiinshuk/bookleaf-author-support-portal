@@ -5,6 +5,8 @@
   "scripts": {
     "build": "cd frontend && npm run build"
   },
-  "devDependencies": {}
+  "dependencies": {
+    "@neon/config": "^1.9.5",
+    "@neon/env": "^1.6.6"
+  }
 }
-
