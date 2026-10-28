@@ -1,35 +1,60 @@
-# Deploying BookLeaf to Vercel (free tier)
+# Deploying BookLeaf to Vercel as a multi-service project
 
-## What I prepared in the repo
-- `vercel.json` build + routing (frontend in `frontend/dist`, API forwarded from `/api/*` to the Express serverless function)
-- `api/index.js` wraps the Express app with `serverless-http` so serverless cold starts work
-- `backend/scripts/to-postgres.mjs` + `npm run build:deploy` keep SQLite for local dev but switch Prisma provider to PostgreSQL for the build
-- Frontend `api.js` honors `VITE_API_BASE` (defaults to same-origin `/api`)
-- Frontend switched the "live" ticket updates from WebSocket to 4-second polling so they survive on Vercel (SQLite's `ws` connections don't persist on serverless; the WS test path still exists for local dev)
+This repository is configured as a Vercel multi-service project.
 
-## You still have to do (free or trial — about 10 minutes)
-1. Create a free Postgres DB — e.g. https://neon.tech (Vercel Postgres / Neon integration). Copy the **pooled** connection string beginning `postgres://` or `postgresql://`.
-2. Import this repo into Vercel (https://vercel.com/new) and set these environment variables in the project settings:
-   - `DATABASE_URL` = the Neon/Supabase pooled Postgres connection string
-   - `JWT_SECRET` = any 32+ char string
-   - `OPENAI_API_KEY` = your key (optional — the app falls back to deterministic drafts without it)
-   - `OPENAI_MODEL` = `gpt-4o-mini`
-   - `CORS_ORIGIN` = https://your-deployed-domain.vercel.app (so credentialed frontend calls work)
-   - `VITE_API_BASE` = leave blank (same-origin)
-3. Deploy. Vercel will run `npm run build:deploy` which swaps the Prisma provider, runs `migrate deploy`, then builds Vite.
-4. Seed the database once (from your machine, with `DATABASE_URL` set to the prod connection string):
-   ```
-   cd backend && npm run migrate && npm run seed
-   ```
-   (`npm run migrate` = `prisma migrate dev`; for prod use `node_modules/.bin/prisma migrate deploy`).
-5. Visit the deployed URL. Sign in with `admin@bookleaf.com` / `admin123` or `priya.sharma@email.com` / `author123`.
+## Service layout
+- `services.backend` — Express API under `backend/`.
+- `services.frontend` — Vite SPA under `frontend/`.
+- Top-level public routing:
+  - `/api/(.*)` -> backend (only exposed path prefix)
+  - `/(.*)` -> frontend (SPA catch-all)
 
-## Live URL plan (what I'd give graders)
-- Vercel URL like `https://bookleaf-author-support-portal-<hash>.vercel.app`
-- Include test credentials in the README (already done)
+## What the application code already agrees with on
+- Backend mounts all routes under `/api/...`.
+- Frontend calls `/api/...` from the browser in production and via the Vite proxy (`/api -> localhost:4000`) in dev.
+- Backend never calls another service, so there are **no service bindings** (the frontend reaches it through the public rewrite instead). The service names, rewrites, and bindings list below are exactly what this repo uses.
+- `AI provider API (OpenAI / Ollama)` is an external HTTP service; it is not a Vercel service.
 
-## Notes / caveats
-- SQLite keeps local dev instant; production uses Postgres per the assignment's provider swap.
-- WebSocket was converted to polling so all Vercel real-time-ish needs work (the spec explicitly allows WebSockets, SSE, or polling).
-- Files aren't uploaded (assignment bonus, UI only).
-- Deterministic fallback still scores "no AI key" path with real labels.
+## Topology
+- Services: `backend`, `frontend`
+- Public rewrites: `/api/(.*)` -> backend, `/(.*)` -> frontend
+- Bindings: none — confirm or I can add bindings only if you add another service
+
+## Vercel setup (a few minutes)
+1. Sign up at https://vercel.com if you don't have an account. Connect your GitHub account through "Continue with GitHub".
+2. https://vercel.com/new -> Import `kiinshuk/bookleaf-author-support-portal`.
+3. Vercel reads `vercel.json` and runs per-service build commands:
+   - backend: `npm install` then `npm run build:deploy`
+     - `build:deploy`: switches the Prisma provider to Postgres, and runs `db push`
+   - frontend: `npm install` then `npm run build` (Vite)
+4. Before deploying, add these Environment Variables (Settings -> Environment Variables):
+   - `DATABASE_URL` — a pooled Postgres connection string (for example, Neon's)
+   - `JWT_SECRET` — any 32+ character string
+   - `OPENAI_API_KEY` — optional; leave blank and the deterministic fallback is used
+   - `OPENAI_MODEL` — `gpt-4o-mini` (optional)
+   - `CORS_ORIGIN` — the eventual public origin (e.g. `https://bookleaf-author-support-portal.vercel.app`)
+   - `VITE_API_BASE` — leave blank (defaults to `/api`)
+5. Click Deploy and copy the assigned domain (e.g. `https://bookleaf-author-support-portal.vercel.app`).
+
+## Seed demo data once
+```bash
+cd backend
+DATABASE_URL="postgresql://..." node src/seed/index.js
+```
+
+## Local dev
+```bash
+cd backend && npm run dev    # http://localhost:4000/api/...
+cd frontend && npm run dev  # http://localhost:5173 with Vite proxy
+```
+Everything runs on SQLite by default (`backend/prisma/schema.prisma` is still SQLite).
+
+## Health check
+```bash
+curl https://<your-deployment>.vercel.app/api/health
+```
+
+## Notes
+- Express framework entrypoint on Vercel is `backend/src/index.js`; it both exports the `app` and calls `startServer()` only when not on Vercel (so local dev still works).
+- WebSockets were converted to 4-second polling to survive serverless runtimes, as Vercel services do not support persistent WebSocket connections.
+- Internal notes stay server-side — Vercel service bindings are not used here.

@@ -9,6 +9,7 @@
     "migrate": "prisma migrate dev --name init",
     "generate": "prisma generate",
     "seed": "node src/seed/index.js",
+    "build:deploy": "node scripts/to-postgres.mjs && npx prisma db push --accept-data-loss"
     "studio": "prisma studio",
     "verify:dataset": "node scripts/verify-dataset.js",
     "start:prod": "node src/index.js",

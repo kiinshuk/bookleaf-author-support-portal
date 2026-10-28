@@ -1,12 +1,39 @@
 {
-  "version": 2,
-  "buildCommand": "cd backend && npm install && node scripts/to-postgres.mjs && npx prisma migrate deploy || npx prisma db push --accept-data-loss && cd ../frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
-  "installCommand": "npm install",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "backend": {
+      "root": "backend",
+      "framework": "express",
+      "entrypoint": "src/index.js",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build:deploy",
+      "functions": {
+        "src/index.js": {
+          "maxDuration": 30,
+          "memory": 1024
+        }
+      }
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist"
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/index.js": { "maxDuration": 30, "memory": 1024 }
-  }
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
+    }
+  ]
 }

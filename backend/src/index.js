@@ -27,9 +27,21 @@ app.use(helmet());
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 
-const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, keyGenerator: (req) => req.ip || req.headers?.["x-forwarded-for"] || req.socket?.remoteAddress || "anon", validate: { ip: false } });
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  keyGenerator: (req) =>
+    req.ip || (Array.isArray(req.headers?.["x-forwarded-for"]) ? req.headers["x-forwarded-for"][0] : req.headers?.["x-forwarded-for"]) || req.socket?.remoteAddress || "anon",
+  validate: { ip: false },
+});
 app.use(globalLimiter);
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyGenerator: (req) => req.ip || req.headers?.["x-forwarded-for"] || req.socket?.remoteAddress || "anon", validate: { ip: false } });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) =>
+    req.ip || (Array.isArray(req.headers?.["x-forwarded-for"]) ? req.headers["x-forwarded-for"][0] : req.headers?.["x-forwarded-for"]) || req.socket?.remoteAddress || "anon",
+  validate: { ip: false },
+});
 
 app.get(API_PREFIX + "/health", (req, res) => res.json({ status: "ok", env: config.nodeEnv }));
 
@@ -47,6 +59,10 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || "Internal server error" });
 });
 
+export default app;
+
+export { app };
+
 let server;
 export function startServer() {
   if (server) return server;
@@ -59,9 +75,8 @@ export function startServer() {
   return server;
 }
 
-export { app };
-
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// Vercel and importers should use default export. Local dev still requires listening manually.
+if (!process.env.VERCEL && process.argv[1] === fileURLToPath(import.meta.url)) {
   startServer();
 }
 
