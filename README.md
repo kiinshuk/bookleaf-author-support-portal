@@ -3,13 +3,20 @@
 ## Overview
 Web app with author and admin portals, ticket lifecycle, real-time updates, and AI-assisted responses.
 
-## Stack
-- Frontend: React 18, Vite 5, React Router 6
-- Backend: Node.js, Express 4, Prisma ORM
-- Database: SQLite local (switch provider for Postgres in production)
-- Auth: JWT + bcrypt
-- Real-time: WebSockets (ws)
-- AI: OpenAI gpt-4o-mini (optional), Ollama optional, deterministic fallback
+## Architecture & Decisions
+- **Monolith-luge-that-ships**: one Express backend (`backend/`) plus one Vite SPA (`frontend/`), communicating only over the documented REST API and a JWT-gated WebSocket. Clean layering: routes → services (`ai.js`) → Prisma.
+- **Database:** Prisma ORM over SQLite for local dev (`prisma/schema.prisma`). Provider-switchable to managed Postgres by changing the provider line + a migration; SQLite kept for zero-friction reviewer onboarding.
+- **Auth:** JWT (`jsonwebtoken`) + bcrypt, role-aware middleware (`requireAuth` / `requireRole`); author ownership checked at query level (books, tickets, responses) so authors never see other authors' data.
+- **Validation/errors:** explicit 400s with `{ error }` bodies on every route path (e.g. invalid book override → 400, invalid `createdAfter` → 400). Global error handler never leaks stack traces or secrets. Helmet + CORS configured.
+- **Real-time:** filtered WebSocket broadcasts — authors receive only their tickets, admins receive all; JWT validated on `ws` connection.
+- **AI:** one call site (`callLLM()`), see AI Integration section.
+- **Frontend:** component/page split (`src/components/`, `src/pages/`), auth context, role-guarded routes, live updates via `ws`.
+
+## Project structure (excerpt)
+```
+backend/   src/{config,index,routes,services,middleware,lib}  prisma  test  openapi.json
+frontend/  src/{components,pages,lib}  index.html  dist/ (build)
+```
 
 ## UI Design
 The frontend follows a PlayStation-inspired design system (see `DESIGN.md`, installed via `npx getdesign@latest add playstation`):
@@ -51,6 +58,7 @@ Auth: POST /auth/login, GET /auth/me
 Authors: GET /authors, GET /authors/me
 Books: GET /books, GET /books/:id
 Tickets: POST /tickets, GET /tickets (filters: status, category, priority, createdAfter ISO date; sorted Critical→Low then oldest first), GET /tickets/:id, PATCH /tickets/:id (admin), POST /tickets/:id/notes (admin), POST /tickets/:id/responses, POST /tickets/:id/draft (admin)
+AI: GET /ai/usage (admin-only, token/cost telemetry)
 
 Full request/response schemas for every endpoint: Swagger UI at http://localhost:4000/docs (spec source: `backend/openapi.json`).
 
@@ -97,3 +105,8 @@ Frontend production build: passes.
 - No live deployment URL — no hosting credentials available; local run instructions above.
 - No automated WebSocket tests yet.
 - Deterministic fallbacks are not AI-generated and are labeled as fallback drafts in docs.
+
+## Brief write-up (submission note)
+**What I prioritised:** the full ticket lifecycle end-to-end (author + admin, real-time, AI triage + draft, admin override, internal notes, assignment), plus graceful degradation so a reviewer without API keys still sees classification and drafts. Structure and tests before polishing UI.
+**Trade-offs:** SQLite over Postgres for reviewer onboarding speed; LLM optional/keyless-safe by construction so reviewers without an OpenAI key still see a working system; attachments deliberately UI-only per the spec's bonus marker; no live deployment URL (no credentials available) rather than a fabricated one.
+**Production evolution:** managed Postgres, RAG over a real help-centre plus the KB, per-tenant triage rules, attachment handling with scanning in an object store, OpenTelemetry spans on the AI path, audit log on admin overrides, and CI-level test gates per PR.
