@@ -20,7 +20,6 @@ import aiRoutes from "./routes/ai.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const openapi = JSON.parse(readFileSync(join(__dirname, "..", "openapi.json"), "utf8"));
 
-const API_PREFIX = "/api";
 const allowedOrigins = [
   config.corsOrigin,
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
@@ -55,15 +54,18 @@ const authLimiter = rateLimit({
   validate: { ip: false },
 });
 
-app.get(API_PREFIX + "/health", (req, res) => res.json({ status: "ok", env: config.nodeEnv }));
+const apiRouter = express.Router();
+apiRouter.get("/health", (req, res) => res.json({ status: "ok", env: config.nodeEnv }));
+apiRouter.use("/auth", authLimiter, authRoutes);
+apiRouter.use("/authors", authorRoutes);
+apiRouter.use("/books", bookRoutes);
+apiRouter.use("/tickets", ticketRoutes);
+apiRouter.use("/ai", aiRoutes);
+apiRouter.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 
-app.use(API_PREFIX + "/auth", authLimiter, authRoutes);
-app.use(API_PREFIX + "/authors", authorRoutes);
-app.use(API_PREFIX + "/books", bookRoutes);
-app.use(API_PREFIX + "/tickets", ticketRoutes);
-app.use(API_PREFIX + "/ai", aiRoutes);
-
-app.use(API_PREFIX + "/docs", swaggerUi.serve, swaggerUi.setup(openapi));
+app.use("/api", apiRouter);
+// Accept direct service-root mounts (same handler registration, safe fallback for runtimes).
+app.use(apiRouter);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 app.use((err, req, res, next) => {
