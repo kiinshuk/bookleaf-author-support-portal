@@ -1,16 +1,25 @@
 # BookLeaf Author Support & Communication Portal
 
 ## Overview
-Web app with author and admin portals, ticket lifecycle, real-time updates, and AI-assisted responses.
+Web app with author and admin portals, ticket lifecycle, near-real-time updates, and AI-assisted responses.
+
+## Live Demo
+- Production URL: https://bookleaf-author-support-portal-hszm.vercel.app/
+- API health: https://bookleaf-author-support-portal-hszm.vercel.app/api/health -> {"status":"ok","env":"production"}
+- Swagger UI: https://bookleaf-author-support-portal-hszm.vercel.app/api/docs/
+- Admin login: admin@bookleaf.com / admin123
+- Author login: any sample author email (e.g. priya.sharma@email.com) / author123
+- Database: Neon Postgres (linked via neon.ts, branch production; provisioned and seeded).
+- Deployment verified: /api/health, admin/author login, 18 books, ticket CRUD + admin override + author-visible updates all pass against the live site.
 
 ## Architecture & Decisions
 - **Monolith-luge-that-ships**: one Express backend (`backend/`) plus one Vite SPA (`frontend/`), communicating only over the documented REST API and a JWT-gated WebSocket. Clean layering: routes → services (`ai.js`) → Prisma.
 - **Database:** Prisma ORM over SQLite for local dev (`prisma/schema.prisma`). Provider-switchable to managed Postgres by changing the provider line + a migration; SQLite kept for zero-friction reviewer onboarding.
 - **Auth:** JWT (`jsonwebtoken`) + bcrypt, role-aware middleware (`requireAuth` / `requireRole`); author ownership checked at query level (books, tickets, responses) so authors never see other authors' data.
 - **Validation/errors:** explicit 400s with `{ error }` bodies on every route path (e.g. invalid book override → 400, invalid `createdAfter` → 400). Global error handler never leaks stack traces or secrets. Helmet + CORS configured.
-- **Real-time:** filtered WebSocket broadcasts — authors receive only their tickets, admins receive all; JWT validated on `ws` connection.
+- **Real-time:** the UI refreshes every 4 seconds (near-real-time polling) for production reliability; an optional WebSocket at `ws://localhost:4000/ws?token=<jwt>` is also available for local dev with JWT-validated, filtered broadcasts.
 - **AI:** one call site (`callLLM()`), see AI Integration section.
-- **Frontend:** component/page split (`src/components/`, `src/pages/`), auth context, role-guarded routes, live updates via `ws`.
+- **Frontend:** component/page split (`src/components/`, `src/pages/`), auth context, role-guarded routes, live updates via 4s polling (see Real-time section).
 
 ## Project structure (excerpt)
 ```
@@ -63,7 +72,7 @@ AI: GET /ai/usage (admin-only, token/cost telemetry)
 Full request/response schemas for every endpoint: Swagger UI at http://localhost:4000/api/docs (deployed: <deployed origin>/api/docs; spec source: `backend/openapi.json`).
 
 ## Real-time
-WebSocket at ws://localhost:4000/ws?token=<jwt>. Emits ticket.created, ticket.updated, ticket.response.
+Primary refresh is polling every 4s (see pages `MyTickets`, `AdminQueue`, `TicketDetail`). Optional WebSocket at `ws://localhost:4000/ws?token=<jwt>` (emits ticket.created, ticket.updated, ticket.response) is retained for local dev; serverless deployments rely on polling.
 
 ## AI Integration
 
@@ -136,5 +145,5 @@ See `DEPLOY.md` for the full step-by-step. The repository is configured as a **V
 
 ## Brief write-up (submission note)
 **What I prioritised:** the full ticket lifecycle end-to-end (author + admin, real-time, AI triage + draft, admin override, internal notes, assignment), plus graceful degradation so a reviewer without API keys still sees classification and drafts. Structure and tests before polishing UI.
-**Trade-offs:** SQLite over Postgres for reviewer onboarding speed; LLM optional/keyless-safe by construction so reviewers without an OpenAI key still see a working system; attachments deliberately UI-only per the spec's bonus marker; no live deployment URL (no credentials available) rather than a fabricated one.
+**Trade-offs:** SQLite over Postgres for reviewer onboarding speed; LLM optional/keyless-safe by construction so reviewers without an OpenAI key still see a working system; attachments deliberately UI-only per the spec's bonus marker; live deployment on Vercel backed by Neon Postgres (URL above).
 **Production evolution:** managed Postgres, RAG over a real help-centre plus the KB, per-tenant triage rules, attachment handling with scanning in an object store, OpenTelemetry spans on the AI path, audit log on admin overrides, and CI-level test gates per PR.
