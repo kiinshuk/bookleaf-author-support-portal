@@ -21,15 +21,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const openapi = JSON.parse(readFileSync(join(__dirname, "..", "openapi.json"), "utf8"));
 
 const allowedOrigins = [
-  config.corsOrigin,
+  ...(config.corsOrigin || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
   process.env.VERCEL_URL || null,
 ].filter(Boolean);
 
+const VercelPreviewOrigin = (origin) => /^https?:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
+
 const corsOriginCheck = (origin, callback) => {
-  if (!origin) return callback(null, true); // same-origin or machine clients without Origin
+  if (!origin) return callback(null, true);
   if (allowedOrigins.includes(origin)) return callback(null, true);
-  callback(new Error("Not allowed by CORS"));
+  if (VercelPreviewOrigin(origin)) return callback(null, true);
+  const err = new Error("Not allowed by CORS");
+  err.statusCode = 403;
+  callback(err);
 };
 
 const app = express();
@@ -66,6 +74,11 @@ apiRouter.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 app.use("/api", apiRouter);
 // Accept direct service-root mounts (same handler registration, safe fallback for runtimes).
 app.use(apiRouter);
+
+app.use((err, req, res, next) => {
+  const status = err && err.statusCode ? err.statusCode : 500;
+  res.status(status).json({ error: err && err.message ? err.message : "Request failed" });
+});
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 app.use((err, req, res, next) => {
